@@ -38,18 +38,18 @@ datatype typ = Anything
 (** Solutions **)
 
 (* 1 *)
-fun only_capitals xs =
-    List.filter (fn x => Char.isUpper(String.sub(x, 0))) xs
+val only_capitals =
+    List.filter (fn x => Char.isUpper(String.sub(x, 0)))
 
 
 (* 2 *)
-fun longest_string1 xs =
-    List.foldl (fn (x, m) => if String.size x > String.size m then x else m) "" xs
+val longest_string1 =
+    List.foldl (fn (x, m) => if String.size x > String.size m then x else m) ""
 
 
 (* 3 *)
-fun longest_string2 xs =
-    List.foldl (fn (x, m) => if String.size x >= String.size m then x else m) "" xs
+val longest_string2 =
+    List.foldl (fn (x, m) => if String.size x >= String.size m then x else m) ""
 
 
 (* 4 *)
@@ -143,3 +143,55 @@ fun match (v, p) =
 (* 12 *)
 fun first_match v ps =
    SOME (first_answer match (List.map (fn x => (v, x)) ps)) handle NoAnswer => NONE
+
+
+(* 13 *)
+(* Works except for proper Constructor match and yeah definitely not elegant *)
+fun typecheck_patterns (ts, ps) = let
+
+    fun type_of p =
+	case p of
+	    ConstP _ => IntT
+	  | TupleP ps => TupleT (List.map (fn x => type_of x) ps)
+	  | ConstructorP (x, v) => (case (List.find (fn (n, _, _) => x = n) ts) of
+					SOME (_, t, _) => Datatype t
+				      | NONE => raise NoAnswer) (* Only checks for name match which is not thorough *)
+	  | UnitP => UnitT 
+	  | _  => Anything
+
+    fun tuple_match (x, y) =
+	case (x, y) of
+	    ((Anything, t) | (t, Anything)) => SOME [t]
+	  | (IntT, IntT) => SOME [IntT]
+	  | (TupleT f, TupleT s) => all_answers tuple_match (ListPair.zip (f, s))
+	  | (Datatype f, Datatype s) => if f = s then SOME [x] else NONE
+	  | (_, _) => NONE
+				       
+    fun loop (t, ps) =
+	case ps of
+	    [] => SOME t
+	  | p::ps => case (t, type_of p) of
+			 ((Anything, t') | (t', Anything)) => loop (t', ps)
+		       | (IntT, IntT) => loop (t, ps) 
+		       | (TupleT tlast, TupleT tthis) => if List.length tlast = List.length tthis
+							  then
+							      let
+								  val all_match = all_answers tuple_match (ListPair.zip (tlast, tthis))
+							      in
+								  case all_match of
+								      SOME t' => loop (TupleT t', ps)
+								    | NONE => NONE 
+							      end
+							  else NONE
+		       | (Datatype tlast, Datatype tthis) => if tthis = tlast
+							      then loop (t, ps)
+							      else NONE
+		       | (_, _) => NONE 
+				       
+in
+    
+    case ps of
+	[] => NONE
+      | p::ps => (loop (type_of p, ps) handle NoAnswer => NONE)
+		     
+end
